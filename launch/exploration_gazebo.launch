@@ -1,0 +1,27 @@
+<launch>
+  <arg name="RVIZ_CONF" default="$(find frontier_exploration)/rviz/turtlebot_exploration.rviz"/>
+  <!-- <arg name="world_file" default="worlds/willowgarage.world"/>   -->
+  <!-- Want to specifically use a world file instead of using $(env TURTLEBOT_GAZEBO_WORLD_FILE) -->
+
+  <!--  Environment variable "TURTLEBOT_GAZEBO_WORLD_FILE" is overridden by world_file variable -->
+  <!-- <include file="$(find turtlebot_gazebo)/launch/turtlebot_world.launch">
+    <arg name="world_file" value="$(arg world_file)"/>
+  </include> -->
+
+  <include file="$(find gazebo_ros)/launch/empty_world.launch">
+    <arg name="world_name" value="$(find turtlebot3_gazebo)/worlds/hector_test_world.world"/>
+    <arg name="paused" value="false"/>
+    <arg name="use_sim_time" value="true"/>
+    <arg name="gui" value="true"/>
+    <arg name="headless" value="false"/>
+    <arg name="debug" value="false"/>
+  </include>
+
+
+  <include file="$(find turtlebot3_gazebo)/launch/gmapping_demo.launch" />
+
+  <include file="$(find frontier_exploration)/launch/exploration_all.launch">
+    <arg name="RVIZ_CONF" value="$(arg RVIZ_CONF)"/>
+  </include>
+
+</launch>
