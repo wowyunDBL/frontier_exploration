@@ -6,12 +6,14 @@ from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Twist, Point
 from sensor_msgs.msg import Image, CameraInfo
 import tf
+from mapping_explorer.msg import Trunkset, Trunkinfo
 
 '''math tool'''
 from numpy.core.numeric import Inf
 from collections import deque
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.spatial import distance as dist
 
 class apf():
     def __init__(self):
@@ -22,13 +24,17 @@ class apf():
         self.potential_af_Pub = rospy.Publisher('/explore/potential/af',Point,queue_size=5)
         self.potential_rf_Pub = rospy.Publisher('/explore/potential/rf',Point,queue_size=5)
         self.trajRThetaPub = rospy.Publisher('/explore/trajRTheta',Point,queue_size=5)
-        self.odomSub = rospy.Subscriber("/odom",Odometry, self.cbOdom)
-        # self.subDepth = rospy.Subscriber("/camera/depth/image_rect_raw", Image, self.cbDepth)
+        self.odomSub = rospy.Subscriber("/odom",Odometry, self.cbOdom,buff_size=2**20,queue_size=1)
+        # self.trunkInfo = rospy.Subscriber("/wow/trunk_info", Trunkset, self.cbTrunk,buff_size=2**20,queue_size=1)
         
         self.ox = [1.0, 3.0, 5.0]  # obstacle x position list [m]
-        self.oy = [2.0, 2.0, 2.0]  # obstacle y position list [m]    
-        self.waypoints_x = 7.0  # goal x position [m]
-        self.waypoints_y = 2.0  # goal y position [m]
+        self.oy = [2.0, 2.0, 2.0]  # obstacle y position list [m]
+        self.oradi = [0.3, 0.3, 0.3]  # obstacle x position list [m]
+        self.waypoints_x_list = [7.0, 0.0]  # goal x position [m]
+        self.waypoints_y_list = [2.0, 2.0]  # goal y position [m]    
+        self.wayp_index = 0
+        self.waypoints_x = self.waypoints_x_list[self.wayp_index]  # goal x position [m]
+        self.waypoints_y = self.waypoints_y_list[self.wayp_index]  # goal y position [m]
         self.positive_bds = np.array([[0,-5],[20,-5],[20,5],[0,5]])
         self.angKp = 0.1
         self.linKp = 0.3
@@ -51,7 +57,7 @@ class apf():
         self.GOAL_DIST_THRES = 0.1
         # self.WAYPOINTS_DIST_THRES = 0.
         self.ATTRACT_DIST_THRES = 1
-        self.OBSTACLE_THRES = 1
+        self.OBSTACLE_THRES = 0.5
         self.ROBOT_STEP = 0.5
 
         self.generate_next_goal()
@@ -97,12 +103,14 @@ class apf():
 
     def calc_repulsive_potential(self,x,y):
         tmp = np.array([0.0,0.0])
-        Q = 0.5
+        Q = self.OBSTACLE_THRES
         for i in range(len(self.ox)):
-            D = self.vector_dist( (x,y),(self.ox[i],self.oy[i]) )
+            D = self.vector_dist( (x,y),(self.ox[i],self.oy[i]) ) - self.oradi[i]
             if D <= self.OBSTACLE_THRES:
                 tmp += (-1/D+1/Q)/(D**2) * ( np.array([x,y]) - np.array([self.ox[i], self.oy[i]]) ) /2
+                
             # else:
+
         return tmp
 
     def cbOdom(self,msg):
@@ -113,6 +121,33 @@ class apf():
                         msg.pose.pose.orientation.z,
                         msg.pose.pose.orientation.w)
         _,_,self.robotPoseTheta = tf.transformations.euler_from_quaternion(quaternion)
+
+    # def cbTrunk(self,msg):
+    #     trunk_data = msg
+    #     while len(msg.aframe):
+    #         inAframe = trunk_data.aframe.pop()
+    #         distance = inAframe.d
+    #         theta = inAframe.t
+    #         heading = self.robotPoseTheta
+    #         utm_baselink_x = -self.robotPoseY
+    #         utm_baselink_y = self.robotPoseX
+    #         map_trunk_point = np.array([[distance*np.cos(theta)],[distance*np.sin(theta)],[1]])
+    #         transform_utm2map = np.array([ [np.cos(heading), -np.sin(heading), utm_baselink_x],\
+    #                                         [np.sin(heading), np.cos(heading), utm_baselink_y], \
+    #                                         [0,0,1]] )
+    #         utm_trunk = np.dot(transform_utm2map, map_trunk_point)
+            
+    #         centroid_tmpXYR = np.array([utm_trunk[0,0],utm_trunk[1,0],inAframe.r])
+    #         centroid_tmp_rawList_copy = np.asarray(centroid_rawList_copy[i][:3])
+    #         eDist = dist.euclidean(centroid_tmpXYR, centroid_tmp_rawList_copy)
+    #         if eDist < 25: # 1m
+             
+    #             if self.observed_obs is None:
+    #                 self.observed_obs = np.array([ [utm_trunk[0,0]],[utm_trunk[1,0]] ])
+    #                 print('observe new one')
+    #             else:
+    #                 self.observed_obs = np.append( self.observed_obs, np.array([ [utm_trunk[0,0]],[utm_trunk[1,0]] ]) )
+    #                 print('observe next one')
 
     def fnControlNode(self):
         x_diff, y_diff = self.goal_x - self.robotPoseX, self.goal_y - self.robotPoseY
@@ -132,22 +167,26 @@ class apf():
         dot = tmp_way_vec.dot(tmp_goal_vec)
         if np.hypot(x_diff_goal, y_diff_goal) < self.GOAL_DIST_THRES:
             self.fnStop()
-            print('control: achieve waypoint, fnStop!')
+            print('control: achieve ONE waypoint, fnStop!')
+            self.wayp_index += 1
+
+            self.waypoints_x = self.waypoints_x_list[self.wayp_index]  # goal x position [m]
+            self.waypoints_y = self.waypoints_y_list[self.wayp_index]  # goal y position [m]
         elif rho <= self.GOAL_DIST_THRES or abs(np.arccos(dot/rho_goal/rho))>np.pi/2:
             print('control: achieve traj, generate next!')
             self.generate_next_goal()
         elif rho_goal<rho:
-            print('control: rho_goal<rho, track rho_goal!')
+            # print('control: rho_goal<rho, track rho_goal!')
             self.fnTrackPcontrol(rho_goal, alpha)
         else:
-            print('control: track rho!')
+            # print('control: track rho!')
             self.fnTrackPcontrol(rho, alpha)
 
     def fnTrackPcontrol(self, dist, angle):
         msgVel = Twist()
-        if (angle > 0.3 or angle < -0.3) and False:
+        if (angle > 0.3 or angle < -0.3):
             # while(abs(angle)>0.05):
-            print("adjust angle! angle: ", angle)
+            # print("adjust angle! angle: ", angle)
             angularVel = angle * self.angKp
             if np.abs(angularVel) > self.angVel_bound: 
                 if angularVel > 0:
