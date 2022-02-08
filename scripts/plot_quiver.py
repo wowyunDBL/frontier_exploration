@@ -10,11 +10,13 @@ y_list = [0.0, 0.0, 0.0, 0.0]
 
 class apf_drawing():
     def __init__(self):
-        self.ox = [1.0, 3.0, 5.0]  # obstacle x position list [m]
-        self.oy = [2.0, 2.0, 2.0]  # obstacle y position list [m]
-        self.oradi = [0.3, 0.3, 0.3]  # obstacle x position list [m]
-        self.waypoints_x = 7.0  # goal x position [m]
-        self.waypoints_y = 2.0
+        # self.ox = [1.0, 3.0, 5.0]  # obstacle x position list [m]
+        # self.oy = [2.0, 2.0, 2.0]  # obstacle y position list [m]
+        self.ox = [7.0]  # obstacle x position list [m]
+        self.oy = [2.0]  # obstacle y position list [m]
+        self.oradi = [0.3]  # obstacle x position list [m]
+        self.waypoints_x = 0.0  # goal x position [m]
+        self.waypoints_y = 0.0
 
         self.GOAL_DIST_THRES = 0.1
         # self.WAYPOINTS_DIST_THRES = 0.
@@ -42,9 +44,11 @@ class apf_drawing():
         Q = self.OBSTACLE_THRES
         for i in range(len(self.ox)):
             D = self.vector_dist( (x,y),(self.ox[i],self.oy[i]) ) - self.oradi[i]
-            if D <= self.OBSTACLE_THRES and D>0.8:
-                tmp += (-1/D+1/Q)/(D**2) * ( np.array([x,y]) - np.array([self.ox[i], self.oy[i]]) ) /2
+            if D <= self.OBSTACLE_THRES:# and D>0.8:
+                # tmp += (-1/D+1/Q)/(D**2) * ( np.array([self.ox[i], self.oy[i]]) - np.array([x,y])) /2 * 0.5
+                tmp += (-1/D+1/Q)/(D**2) * ( -np.array([self.ox[i], self.oy[i]]) + np.array([x,y])) /2 * 0.5
             # else:
+            #     tmp += np.array([0.0,0.0])
         return tmp
 
     def calc_potential_field(self, x, y):
@@ -61,36 +65,42 @@ class apf_drawing():
         U_tmp = []
         V_tmp = []
         Z = []
-        for yy in y_list:
-            for xx in x_list:
-                pf_force_vec = self.calc_potential_field(xx, yy)
-                U_tmp.append(pf_force_vec[0])
-                V_tmp.append(pf_force_vec[1])
-                Z.append(self.vector_dist((0,0),pf_force_vec))
+        for j,yy in enumerate(y_list):
+            for i,xx in enumerate(x_list):
+                # print(xx)
+                # print(X[xx][yy])
+                goal_dist = np.sqrt(X[j][i]**2 + Y[j][i]**2)
+                obs_dist = np.sqrt((X[j][i]-7)**2 + (Y[j][i]-2)**2)
+                if goal_dist > 2 and obs_dist > 1:
+                    pf_force_vec = self.calc_potential_field(xx, yy)
+                    U_tmp.append(pf_force_vec[0])
+                    V_tmp.append(pf_force_vec[1])
+                    Z.append(self.vector_dist((0,0),pf_force_vec))
+                else:
+                    U_tmp.append(0)
+                    V_tmp.append(0)
+                    Z.append(0)
         U_tmp = np.asarray(U_tmp)
         U = np.reshape(U_tmp,(len(x_list),len(y_list)))
         V_tmp = np.asarray(V_tmp)
         V = np.reshape(V_tmp,(len(x_list),len(y_list)))
         Z = np.asarray(Z)
         Z = np.reshape(Z,(len(y_list),len(x_list)))
-
-        print(X.shape)
-        print(Y.shape)
-        print(Z.shape)
         
-            # plt.quiver([0,6.8], [0,2.8], [0.9,-0.9], [0.27,-0.4], color='b', units='xy', scale=5)
-        # plt.quiver(X, Y, U, V, color='b', units='xy', scale=5)
-        # plt.scatter(self.ox,self.oy)
+        fig1, ax1 = plt.subplots()
+        plt.quiver(X, Y, U, V, color='b', units='xy', scale=5)
+        plt.scatter(self.ox,self.oy, s=100)
 
-        # plt.title('Vector field')
+        plt.title('Vector field')
     
-        # # x-lim and y-lim
-        # plt.ylim(-0.5, 3)
-        # plt.xlim(-.5, 7.5)
+        # x-lim and y-lim
+        plt.ylim(-0.5, 3)
+        plt.xlim(-.5, 7.5)
+        # Show plot with grid
+        # plt.grid()
+        plt.axis('equal')
+        plt.show()
 
-            # fig = plt.figure()
-            # ax = fig.gca(projection='3d')
-            # ax.plot_surface(X, Y, Z, cmap='seismic')
         fig3, ax3 = plt.subplots(subplot_kw={"projection": "3d"})
         initial_cmap = cm.get_cmap('rainbow')
         # reversed_cmap=initial_cmap.reversed()
@@ -102,29 +112,10 @@ class apf_drawing():
         plt.show()
 
         
-        # Show plot with grid
-        # plt.grid()
-        # plt.show()
 
-# import cv
 
-def draw_click_circle(self, event, x, y, flags, param):
-            if event == cv2.EVENT_LBUTTONDBLCLK:
-                cv2.circle(self.raw_pgm, (x, y), 6, 255, -1)
-
-def reduce_noise(self):
-    print("manually reduce noise---")
-    cv2.namedWindow('raw_pgm')
-    cv2.setMouseCallback('raw_pgm', self.draw_click_circle)
-    while True:
-        cv2.imshow('raw_pgm', self.raw_pgm)
-        key = cv2.waitKey(1) & 0xFF
-        if key == ord('q'):
-            print("break click!")
-            break
-    cv2.imwrite(self.file_path+'raw_modified.png', self.raw_pgm)
 
 if __name__ == '__main__':
-    # apf_drawing_handler = apf_drawing()
-    img = np.zeros( (360,360) )
+    apf_drawing_handler = apf_drawing()
+    # img = np.zeros( (360,360) )
 

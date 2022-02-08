@@ -36,7 +36,7 @@ class apf():
         self.waypoints_x = self.waypoints_x_list[self.wayp_index]  # goal x position [m]
         self.waypoints_y = self.waypoints_y_list[self.wayp_index]  # goal y position [m]
         self.positive_bds = np.array([[0,-5],[20,-5],[20,5],[0,5]])
-        self.angKp = 0.1
+        self.angKp = 0.4
         self.linKp = 0.3
         self.angVel_bound = 0.5 # 0.5*57=23 degree
         self.linVel_bound = 0.5
@@ -57,7 +57,7 @@ class apf():
         self.GOAL_DIST_THRES = 0.1
         # self.WAYPOINTS_DIST_THRES = 0.
         self.ATTRACT_DIST_THRES = 1
-        self.OBSTACLE_THRES = 0.5
+        self.OBSTACLE_THRES = 1.5 #0.8
         self.ROBOT_STEP = 0.5
 
         self.generate_next_goal()
@@ -73,15 +73,63 @@ class apf():
 
         rospy.on_shutdown(self.fnShutDown)
 
+    def fnControlNode(self):
+        x_diff, y_diff = self.goal_x - self.robotPoseX, self.goal_y - self.robotPoseY
+        rho = np.hypot(x_diff, y_diff)
+        goal_arc = np.arctan2(y_diff, x_diff)
+        alpha = (goal_arc - self.robotPoseTheta + np.pi) % (2 * np.pi) - np.pi # [-pi, pi]
+        # print("rho: {}; alpha: {}; goal_arc: {}".format(rho,alpha,goal_arc))
+        msg = Point()
+        msg.x = rho
+        msg.y = alpha
+        self.trajRThetaPub.publish(msg)
+
+        x_diff_goal, y_diff_goal = self.waypoints_x - self.robotPoseX, self.waypoints_y - self.robotPoseY
+        rho_goal = np.hypot(x_diff_goal, y_diff_goal)
+        tmp_way_vec = np.array([x_diff_goal, y_diff_goal])  
+        tmp_goal_vec = np.array([x_diff, y_diff])
+        dot = tmp_way_vec.dot(tmp_goal_vec)
+        ang_btw = min((dot/rho_goal/rho),1)
+        if np.hypot(x_diff_goal, y_diff_goal) < self.GOAL_DIST_THRES:
+            self.fnStop()
+            print('control: achieve ONE waypoint, fnStop!')
+            self.wayp_index += 1
+
+            self.waypoints_x = self.waypoints_x_list[self.wayp_index]  # goal x position [m]
+            self.waypoints_y = self.waypoints_y_list[self.wayp_index]  # goal y position [m]
+        elif rho <= self.GOAL_DIST_THRES or abs(np.arccos(ang_btw))>np.pi/2:
+            print('control: achieve traj, generate next sub-goal!')
+            self.generate_next_goal()
+        elif rho_goal<rho:
+            print('control: rho_goal<rho, track rho_goal!')
+            self.fnTrackPcontrol(rho_goal, alpha)
+        else:
+            # print('control: track rho!')
+            self.fnTrackPcontrol(rho, alpha)
 
     def vector_dist(self,a,b):
         a1,a2 = a
         b1,b2 = b
         return ((b1-a1)**2 + (b2-a2)**2)**0.5 
-
+    def check_APFupperBound(self,vector):
+        if abs(vector[0])>1:
+            if vector[0]>0:
+                vector[0] = 1
+            else:
+                vector[0] = -1
+            print('APF: exceed 1')
+        if abs(vector[1])>1:
+            if vector[1]>0:
+                vector[1] = 1
+            else:
+                vector[1] = -1
+            print('APF: exceed 1')
+        return vector    
     def calc_potential_field(self, x, y):
         af = self.calc_attractive_potential(x, y)
         rf = self.calc_repulsive_potential(x, y)
+        af = self.check_APFupperBound(af)
+        rf = self.check_APFupperBound(rf)
         # print('af: {}; rf: {}'.format(af,rf))
         msg = Point()
         msg.x = af[0]
@@ -104,10 +152,19 @@ class apf():
     def calc_repulsive_potential(self,x,y):
         tmp = np.array([0.0,0.0])
         Q = self.OBSTACLE_THRES
+        x_diff_goal, y_diff_goal = self.waypoints_x - x, self.waypoints_y - y
         for i in range(len(self.ox)):
             D = self.vector_dist( (x,y),(self.ox[i],self.oy[i]) ) - self.oradi[i]
-            if D <= self.OBSTACLE_THRES:
-                tmp += (-1/D+1/Q)/(D**2) * ( np.array([x,y]) - np.array([self.ox[i], self.oy[i]]) ) /2
+            x_diff, y_diff = self.ox[i]-x,self.oy[i]-y
+            rho_goal = np.hypot(x_diff_goal, y_diff_goal)
+            rho = np.hypot(x_diff, y_diff)
+            tmp_way_vec = np.array([x_diff_goal, y_diff_goal])  
+            tmp_obs_vec = np.array([x_diff, y_diff])
+            dot = tmp_way_vec.dot(tmp_obs_vec)
+            print("obs: D: ", D," ", abs(np.arccos(dot/rho_goal/rho)))
+            if D <= self.OBSTACLE_THRES and abs(np.arccos(dot/rho_goal/rho))<np.pi/2:
+                print('add rep')
+                tmp += (-1/D+1/Q)/(D**2) * (np.array([self.ox[i], self.oy[i]]) - np.array([x,y])) /2 
                 
             # else:
 
@@ -149,42 +206,11 @@ class apf():
     #                 self.observed_obs = np.append( self.observed_obs, np.array([ [utm_trunk[0,0]],[utm_trunk[1,0]] ]) )
     #                 print('observe next one')
 
-    def fnControlNode(self):
-        x_diff, y_diff = self.goal_x - self.robotPoseX, self.goal_y - self.robotPoseY
-        rho = np.hypot(x_diff, y_diff)
-        goal_arc = np.arctan2(y_diff, x_diff)
-        alpha = (goal_arc - self.robotPoseTheta + np.pi) % (2 * np.pi) - np.pi # [-pi, pi]
-        # print("rho: {}; alpha: {}; goal_arc: {}".format(rho,alpha,goal_arc))
-        msg = Point()
-        msg.x = rho
-        msg.y = alpha
-        self.trajRThetaPub.publish(msg)
-
-        x_diff_goal, y_diff_goal = self.waypoints_x - self.robotPoseX, self.waypoints_y - self.robotPoseY
-        rho_goal = np.hypot(x_diff_goal, y_diff_goal)
-        tmp_way_vec = np.array([x_diff_goal, y_diff_goal])  
-        tmp_goal_vec = np.array([x_diff, y_diff])
-        dot = tmp_way_vec.dot(tmp_goal_vec)
-        if np.hypot(x_diff_goal, y_diff_goal) < self.GOAL_DIST_THRES:
-            self.fnStop()
-            print('control: achieve ONE waypoint, fnStop!')
-            self.wayp_index += 1
-
-            self.waypoints_x = self.waypoints_x_list[self.wayp_index]  # goal x position [m]
-            self.waypoints_y = self.waypoints_y_list[self.wayp_index]  # goal y position [m]
-        elif rho <= self.GOAL_DIST_THRES or abs(np.arccos(dot/rho_goal/rho))>np.pi/2:
-            print('control: achieve traj, generate next!')
-            self.generate_next_goal()
-        elif rho_goal<rho:
-            # print('control: rho_goal<rho, track rho_goal!')
-            self.fnTrackPcontrol(rho_goal, alpha)
-        else:
-            # print('control: track rho!')
-            self.fnTrackPcontrol(rho, alpha)
+    
 
     def fnTrackPcontrol(self, dist, angle):
         msgVel = Twist()
-        if (angle > 0.3 or angle < -0.3):
+        if (angle > 0.5 or angle < -0.5):
             # while(abs(angle)>0.05):
             # print("adjust angle! angle: ", angle)
             angularVel = angle * self.angKp
@@ -197,9 +223,6 @@ class apf():
             
             self.velPub.publish(msgVel)
             rospy.sleep(0.2)
-                # angle = (goal_arc - self.robotPoseTheta + np.pi) % (2 * np.pi) - np.pi # [-pi, pi]
-
-            # return
 
         elif dist > self.GOAL_DIST_THRES:# or abs(angle)>np.pi/2:
             # print("adjust vel: ")

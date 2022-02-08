@@ -68,6 +68,7 @@ class plot_nodeHandler():
 
         self.lock=threading.Lock()
 
+        '''1. declare data'''
         self.t_data=deque([], maxlen=250)
         self.t_data_odom=deque([], maxlen=2500)
         self.t_data_traj=deque([], maxlen=250)
@@ -83,6 +84,7 @@ class plot_nodeHandler():
         self.traj_y_conti_data=deque([],maxlen=2500)
         # self.alpha=deque([],maxlen=250)
 
+        '''2. declare instance for handling plot'''
         self.cmd_v_line=self.ax1.plot([],[],'-o', color='b',markersize='2', label='Linear')[0] 
         self.cmd_omg_line=self.ax1.plot([],[],'-o', color='salmon',markersize='2', label='Angular')[0]
         self.traj_dot=self.ax2.plot([], [], '-o',markersize='3', color='tab:red',label='traj')[0]
@@ -122,6 +124,7 @@ class plot_nodeHandler():
             odom_t0=np.asarray([x-t0 for x in self.t_data_odom])
             self.lock.release()
 
+            '''3. set data for handling plot instance'''
             self.cmd_omg_line.set_data(cmd_t0, np_cmd_omg_data)
             self.cmd_v_line.set_data(cmd_t0, np_cmd_v_data)
             self.odom_dot.set_data(-np_odom_y_data[-1], np_odom_x_data[-1])
@@ -180,9 +183,9 @@ class plot_nodeHandler():
     def save_fig(self):
 
         if sys.version[0]=='2':
-            self.fig.savefig('/home/yuqiang/211125/' + datetime.now().strftime("%d-%m-%Y %H:%M:%S.%f")+'.png',)
+            self.fig.savefig('/home/ncslaber/110-1/' + datetime.now().strftime("%d-%m-%Y %H:%M:%S.%f")+'.png',)
         elif sys.version[0]=='3':
-            self.fig.savefig('/home/ncslaber/110-1/211125_localTest/z_hat/' + datetime.now().strftime("%d-%m-%Y_%H:%M:%S.%f")+'.png',)
+            self.fig.savefig('/home/ncslaber/110-1/' + datetime.now().strftime("%d-%m-%Y_%H:%M:%S.%f")+'.png',)
 
 
 if __name__ == '__main__':
