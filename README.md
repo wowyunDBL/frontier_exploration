@@ -14,5 +14,9 @@ Video:
 [![Demo Video](http://img.youtube.com/vi/3W1ufJ7rpCA/0.jpg)](https://www.youtube.com/watch?v=3W1ufJ7rpCA)
 
 roslaunch turtlebot3_gazebo turtlebot3_empty_world.launch
-rosrun fr
-roslaunch turtlebot3_slam turtlebot3_frontier_exploration.launch
+rosparam set /apf/trigger True
+rosrun frontier_exploration potential_field_v1.py
+rosrun frontier_exploration plot_node.py
+
+rosrun mapping_exploretrunk_info_node.py
+roslaunch depth_app depth2ls.launch

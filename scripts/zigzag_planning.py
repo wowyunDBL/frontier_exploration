@@ -245,8 +245,10 @@ if __name__ == '__main__':
     # print(path)
 
     import matplotlib.pyplot as plt
-    fig = plt.figure(figsize=(5,5))
-    plt.tight_layout()
+    plt.rcParams['figure.constrained_layout.use'] = True
+    fig,ax = plt.subplots(figsize=(5,5),constrained_layout=True)
+    
+
     BD, obs_utm_list = get_simple_polygon(name = 'rectangle')
     a = planning(BD, obs_utm_list, reso=2, sweep_start_posi=[2,2.0], sweep_vec=[1,0])
     path = a[0]
@@ -262,6 +264,7 @@ if __name__ == '__main__':
     plt.scatter(x, y, c=colors,s=100)
     plt.axis('equal')
     plt.title('zigzag_driven path', fontsize=18)
+    plt.subplots_adjust(top=0.9)
     plt.savefig('/home/anny/path_zigzag.png')
     plt.show()
     plt.close()

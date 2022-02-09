@@ -89,6 +89,7 @@ class plot_nodeHandler():
         self.cmd_omg_line=self.ax1.plot([],[],'-o', color='salmon',markersize='2', label='Angular')[0]
         self.traj_dot=self.ax2.plot([], [], '-o',markersize='3', color='tab:red',label='traj')[0]
         self.odom_dot=self.ax2.plot([], [], 'o',markersize='10', color='lightblue', markeredgecolor='k')[0]
+        # self.wp_dot=self.ax2.plot([], [], 'o',markersize='6', color='k')[0]
         self.odom_line=self.ax2.plot([], [], '-', color='tab:blue')[0]
         self.odom_x_line=self.ax3.plot([], [], '-o', color='k', markersize='1', label='odom_x')[0]
         self.odom_y_line=self.ax4.plot([], [], '-o', color='k', markersize='1', label='odom_y')[0] 
@@ -128,6 +129,7 @@ class plot_nodeHandler():
             self.cmd_omg_line.set_data(cmd_t0, np_cmd_omg_data)
             self.cmd_v_line.set_data(cmd_t0, np_cmd_v_data)
             self.odom_dot.set_data(-np_odom_y_data[-1], np_odom_x_data[-1])
+            # self.wp_dot.set_data(-np_odom_y_data[-1], np_odom_x_data[-1])
             self.odom_line.set_data(-np_odom_y_data, np_odom_x_data)
             self.traj_dot.set_data(-np_traj_y_data,np_traj_x_data)
             self.odom_x_line.set_data(odom_t0, np_odom_x_data)
