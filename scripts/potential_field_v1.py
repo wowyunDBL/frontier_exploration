@@ -17,6 +17,8 @@ from scipy.spatial import distance as dist
 
 from centroidtracker_mine import CentroidTracker
 
+from enum import Enum
+
 class apf():
     def __init__(self):
         
@@ -28,11 +30,14 @@ class apf():
         self.GOAL_DIST_THRES = 0.2
         self.ATTRACT_DIST_THRES = 1
         self.OBSTACLE_THRES = 1.5 #0.8
-        self.ROBOT_STEP = 0.5
+        self.ROBOT_STEP = 0.3
 
         self.trunkTrackDist = 3
         self.CentroidTracker = CentroidTracker()
         
+        self.MotionSM = Enum('MotionSM', 
+                                'exploration moveToObs stabilizeSensing finish')
+        self.current_mode = self.MotionSM.exploration.value
 
         '''zigzag path '''
         self.ox = [1.0, 3.0, 5.0]  # obstacle x position list [m]
@@ -89,43 +94,47 @@ class apf():
         rospy.on_shutdown(self.fnShutDown)
 
     def fnControlNode(self):
-        x_diff, y_diff = self.traj_x - self.robotPoseX, self.traj_y - self.robotPoseY
-        rho = np.hypot(x_diff, y_diff)
-        goal_arc = np.arctan2(y_diff, x_diff)
-        alpha = (goal_arc - self.robotPoseTheta + np.pi) % (2 * np.pi) - np.pi # [-pi, pi]
-        # print("rho: {}; alpha: {}; goal_arc: {}".format(rho,alpha,goal_arc))
-        msg = Point()
-        msg.x = rho
-        msg.y = alpha
-        self.trajRThetaPub.publish(msg)
+        if self.current_mode == self.MotionSM.exploration.value:
+            x_diff, y_diff = self.traj_x - self.robotPoseX, self.traj_y - self.robotPoseY
+            rho = np.hypot(x_diff, y_diff)
+            goal_arc = np.arctan2(y_diff, x_diff)
+            alpha = (goal_arc - self.robotPoseTheta + np.pi) % (2 * np.pi) - np.pi # [-pi, pi]
+            msg = Point()
+            msg.x = rho
+            msg.y = alpha
+            self.trajRThetaPub.publish(msg)
 
-        x_diff_wp, y_diff_wp = self.waypoints_x - self.robotPoseX, self.waypoints_y - self.robotPoseY
-        rho_wp = np.hypot(x_diff_wp, y_diff_wp)
-        tmp_wp_vec = np.array([x_diff_wp, y_diff_wp])  
-        tmp_tj_vec = np.array([x_diff, y_diff])
-        dot = tmp_wp_vec.dot(tmp_tj_vec)
-        ang_btw = min((dot/rho_wp/rho),1) # -1 < cos < 1
-        if np.hypot(x_diff_wp, y_diff_wp) < self.GOAL_DIST_THRES:
-            self.fnStop()
-            print('control: achieve ONE waypoint, fnStop!')
-            self.wayp_index += 1
-            if self.wayp_index<len(self.waypoints_x_list):
-                self.waypoints_x = self.waypoints_x_list[self.wayp_index]  # goal x position [m]
-                self.waypoints_y = self.waypoints_y_list[self.wayp_index]  # goal y position [m]
+            x_diff_wp, y_diff_wp = self.waypoints_x - self.robotPoseX, self.waypoints_y - self.robotPoseY
+            rho_wp = np.hypot(x_diff_wp, y_diff_wp)
+            tmp_wp_vec = np.array([x_diff_wp, y_diff_wp])  
+            tmp_tj_vec = np.array([x_diff, y_diff])
+            dot = tmp_wp_vec.dot(tmp_tj_vec)
+            ang_btw = min((dot/rho_wp/rho),1) # -1 < cos < 1
+            if np.hypot(x_diff_wp, y_diff_wp) < self.GOAL_DIST_THRES:
+                self.fnStop()
+                print('control: achieve ONE waypoint, fnStop!')
+                self.wayp_index += 1
+                if self.wayp_index<len(self.waypoints_x_list):
+                    self.waypoints_x = self.waypoints_x_list[self.wayp_index]  # goal x position [m]
+                    self.waypoints_y = self.waypoints_y_list[self.wayp_index]  # goal y position [m]
+                else:
+                    return
+            elif rho_wp<rho:
+                print('control: rho_goal<rho, track rho_goal!')
+                self.fnTrackPcontrol(rho_wp, alpha)
+            # elif rho <= self.GOAL_DIST_THRES:
+            #     print('control: achieve traj sub-goal, generate next sub-goal!')
+            #     self.generate_next_goal()
+            elif abs(np.arccos(ang_btw))>np.pi/2:
+                print('control: traj behind waypoints, generate next sub-goal!')
+                # self.generate_next_goal()
+
             else:
-                return
-        elif rho_wp<rho:
-            print('control: rho_goal<rho, track rho_goal!')
-            self.fnTrackPcontrol(rho_wp, alpha)
-        elif rho <= self.GOAL_DIST_THRES:
-            print('control: achieve traj sub-goal, generate next sub-goal!')
+                print('control: track rho!',rho, alpha)
+                self.fnTrackPcontrol(rho, alpha)
+            
+            '''generate next trajectory'''
             self.generate_next_goal()
-        elif abs(np.arccos(ang_btw))>np.pi/2:
-            print('control: traj behind waypoints, generate next sub-goal!')
-            self.generate_next_goal()
-        else:
-            # print('control: track rho!')
-            self.fnTrackPcontrol(rho, alpha)
 
     def calc_potential_field(self, x, y):
         af = self.calc_attractive_potential(x, y)
@@ -195,7 +204,10 @@ class apf():
             centroid_tmpXY = np.array([[self.utm_trunk[0,0],self.utm_trunk[1,0]]])
             # print('centroid_tmpXYR: ',centroid_tmpXYR)
             self.CentroidTracker.update(centroid_tmpXY)
-        
+            
+            showup_dict = self.CentroidTracker.showup
+            # for len(showup_dict):
+                
         else:
             return
         # centroid_tmpXYR = np.array([utm_trunk[0,0],utm_trunk[1,0],inAframe.r])
@@ -218,10 +230,10 @@ class apf():
         msgGoal.y = pf_force_vec[1]
         self.potentialPub.publish(msgGoal)
         print('norm: ',np.linalg.norm(pf_force_vec*self.ROBOT_STEP))
-        if np.linalg.norm(pf_force_vec*self.ROBOT_STEP) < 0.2:
-            self.traj_x, self.traj_y = pf_force_vec*self.ROBOT_STEP*5 + np.array([self.robotPoseX, self.robotPoseY])
-        else:
-            self.traj_x, self.traj_y = pf_force_vec*self.ROBOT_STEP + np.array([self.robotPoseX, self.robotPoseY])
+        # if np.linalg.norm(pf_force_vec*self.ROBOT_STEP) < 0.2:
+        #     self.traj_x, self.traj_y = pf_force_vec*self.ROBOT_STEP*5 + np.array([self.robotPoseX, self.robotPoseY])
+        # else:
+        self.traj_x, self.traj_y = pf_force_vec*self.ROBOT_STEP + np.array([self.robotPoseX, self.robotPoseY])
         msgGoal = Point()
         msgGoal.x = self.traj_x
         msgGoal.y = self.traj_y
@@ -241,28 +253,29 @@ class apf():
             msgVel.angular.z = angularVel
             
             self.velPub.publish(msgVel)
-            rospy.sleep(0.2)
+            return
+            # rospy.sleep(0.2)
 
-        elif dist > self.GOAL_DIST_THRES:# or abs(angle)>np.pi/2:
+        # elif dist > self.GOAL_DIST_THRES:# or abs(angle)>np.pi/2:
             # print("adjust vel: ")
 
-            linearVel = dist * self.linKp
-            if np.abs(linearVel) > self.linVel_bound:
-                if linearVel > 0 :
-                    linearVel = self.linVel_bound
-                else: 
-                    linearVel = -self.linVel_bound
-            msgVel.linear.x = linearVel
+        linearVel = dist * self.linKp
+        if np.abs(linearVel) > self.linVel_bound:
+            if linearVel > 0 :
+                linearVel = self.linVel_bound
+            else: 
+                linearVel = -self.linVel_bound
+        msgVel.linear.x = linearVel
 
-            angularVel = angle * self.angKp
-            if np.abs(angularVel) > self.angVel_bound: 
-                if angularVel > 0:
-                    angularVel = self.angVel_bound
-                else:
-                    angularVel = -self.angVel_bound
-            msgVel.angular.z = angularVel
-            
-            self.velPub.publish(msgVel)
+        angularVel = angle * self.angKp
+        if np.abs(angularVel) > self.angVel_bound: 
+            if angularVel > 0:
+                angularVel = self.angVel_bound
+            else:
+                angularVel = -self.angVel_bound
+        msgVel.angular.z = angularVel
+        
+        self.velPub.publish(msgVel)
 
     def get_closest_trunk(self,trunk_data):
         minDist = self.trunkTrackDist
