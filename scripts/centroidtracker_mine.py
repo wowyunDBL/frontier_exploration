@@ -6,9 +6,9 @@ from collections import OrderedDict
 class CentroidTracker():
     def __init__(self, maxDisappeared=10, minShowup=5):
         self.nextObjectID = 1
-        self.objects = OrderedDict()
-        self.disappeared = OrderedDict()
-        self.showup = OrderedDict()
+        self.objects = {}#OrderedDict()
+        self.disappeared = {}#OrderedDict()
+        self.showup = {}#OrderedDict()
         self.maxDisappeared = maxDisappeared
         
     def register(self, centroid):
@@ -73,8 +73,8 @@ class CentroidTracker():
                 for col in unusedCols:
                     self.register(inputCentroids[col])
             # print('centroid...')
-            print(self.objects)
-            print(self.disappeared)
-            print(self.showup)
+            # print(self.objects)
+            # print(self.disappeared)
+            # print(self.showup)
         return self.objects, self.showup, self.disappeared
 

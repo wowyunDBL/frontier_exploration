@@ -37,7 +37,8 @@ class apf():
         
         self.MotionSM = Enum('MotionSM', 
                                 'exploration moveToObs stabilizeSensing finish')
-        self.current_mode = self.MotionSM.exploration.value
+        self.current_mode = self.MotionSM.exploration.value 
+        self.visited_id = []
 
         '''zigzag path '''
         self.ox = [1.0, 3.0, 5.0]  # obstacle x position list [m]
@@ -130,11 +131,13 @@ class apf():
                 # self.generate_next_goal()
 
             else:
-                print('control: track rho!',rho, alpha)
+                # print('control: track rho!',rho, alpha)
                 self.fnTrackPcontrol(rho, alpha)
             
             '''generate next trajectory'''
             self.generate_next_goal()
+        
+        elif self.current_mode == self.MotionSM.moveToObs.value:
 
     def calc_potential_field(self, x, y):
         af = self.calc_attractive_potential(x, y)
@@ -156,10 +159,10 @@ class apf():
         distance = self.vector_dist((x,y),(self.waypoints_x, self.waypoints_y))
 
         if distance <= self.ATTRACT_DIST_THRES:
-            print('attr smaller, goal:',np.array([self.waypoints_x, self.waypoints_y]) - np.array([x,y]))
+            # print('attr smaller, goal:',np.array([self.waypoints_x, self.waypoints_y]) - np.array([x,y]))
             return np.array([self.waypoints_x, self.waypoints_y]) - np.array([x,y])
         else:
-            print('attr larger')
+            # print('attr larger')
             return self.ATTRACT_DIST_THRES/distance * ( np.array([self.waypoints_x, self.waypoints_y]) - np.array([x,y]) )
 
     def calc_repulsive_potential(self,x,y):
@@ -206,8 +209,18 @@ class apf():
             self.CentroidTracker.update(centroid_tmpXY)
             
             showup_dict = self.CentroidTracker.showup
-            # for len(showup_dict):
-                
+            objects_dict = self.CentroidTracker.objects
+            print('a',showup_dict)
+            showup_keys = showup_dict.keys()
+            for now_key in showup_keys:
+                now_value = showup_dict[now_key]
+                if now_key not in self.visited_id:
+                    if now_value > 10:
+                        print('now detect tree: ', now_key, ' move to it!')
+                        self.current_mode = self.MotionSM.moveToObs.value
+                        self.visited_id.append(now_key)
+                        print('visited_id: ',self.visited_id)
+
         else:
             return
         # centroid_tmpXYR = np.array([utm_trunk[0,0],utm_trunk[1,0],inAframe.r])
@@ -229,7 +242,7 @@ class apf():
         msgGoal.x = pf_force_vec[0]
         msgGoal.y = pf_force_vec[1]
         self.potentialPub.publish(msgGoal)
-        print('norm: ',np.linalg.norm(pf_force_vec*self.ROBOT_STEP))
+        # print('norm: ',np.linalg.norm(pf_force_vec*self.ROBOT_STEP))
         # if np.linalg.norm(pf_force_vec*self.ROBOT_STEP) < 0.2:
         #     self.traj_x, self.traj_y = pf_force_vec*self.ROBOT_STEP*5 + np.array([self.robotPoseX, self.robotPoseY])
         # else:
