@@ -18,6 +18,7 @@ rosparam set /apf/trigger True
 rosrun frontier_exploration potential_field_v1.py
 rosrun frontier_exploration plot_node.py
 
-rosrun mapping_explorer trunk_info_node.py
 roslaunch depth_app depth2ls.launch
 roslaunch depth_app hector_mower_simulation.launch
+
+rosbag record /cmd_vel /explore/traj /explore/potential/af /explore/potential/rf /explore/trajRTheta /odom /tree/trunk_info /explore/state

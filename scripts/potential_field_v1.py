@@ -2,6 +2,7 @@
 
 '''ros utils'''
 import rospy
+from std_msgs.msg import UInt8
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Twist, Point
 from sensor_msgs.msg import Image, CameraInfo
@@ -18,6 +19,7 @@ from scipy.spatial import distance as dist
 from centroidtracker_mine import CentroidTracker
 
 from enum import Enum
+import time
 
 class apf():
     def __init__(self):
@@ -38,7 +40,9 @@ class apf():
         self.MotionSM = Enum('MotionSM', 
                                 'exploration moveToObs stabilizeSensing finish')
         self.current_mode = self.MotionSM.exploration.value 
-        self.visited_id = []
+        self.visited_id_dict = {}
+        self.visited_id = None
+        self.startSTOPtime = None
 
         '''zigzag path '''
         self.ox = [1.0, 3.0, 5.0]  # obstacle x position list [m]
@@ -59,6 +63,7 @@ class apf():
         self.potential_af_Pub = rospy.Publisher('/explore/potential/af',Point,queue_size=5)
         self.potential_rf_Pub = rospy.Publisher('/explore/potential/rf',Point,queue_size=5)
         self.trajRThetaPub = rospy.Publisher('/explore/trajRTheta',Point,queue_size=5)
+        self.statePub = rospy.Publisher('/explore/state',UInt8,queue_size=5)
         self.odomSub = rospy.Subscriber("/odom",Odometry, self.cbOdom,buff_size=2**20,queue_size=1)
         self.trunkInfo = rospy.Subscriber("/tree/trunk_info", Trunkset, self.cbTrunk,buff_size=2**20,queue_size=1)
         robotPose = rospy.wait_for_message('/odom',Odometry)
@@ -84,10 +89,9 @@ class apf():
         while not rospy.is_shutdown():
             self.is_triggered = rospy.get_param('/apf/trigger')
             if self.is_triggered == True:
-                if self.wayp_index<len(self.waypoints_x_list):
-                    self.fnControlNode()
-                else:
-                    rospy.loginfo('finish zigzag path!')
+                if not (self.wayp_index<len(self.waypoints_x_list)):
+                    self.current_mode = self.MotionSM.finish.value
+                self.fnControlNode()
             else:
                 self.fnStop()
             loop_rate.sleep()
@@ -95,7 +99,10 @@ class apf():
         rospy.on_shutdown(self.fnShutDown)
 
     def fnControlNode(self):
-        if self.current_mode == self.MotionSM.exploration.value:
+        msg_state = UInt8()
+        msg_state.data = self.current_mode
+        self.statePub.publish(msg_state)
+        if True:#self.current_mode == self.MotionSM.exploration.value:
             x_diff, y_diff = self.traj_x - self.robotPoseX, self.traj_y - self.robotPoseY
             rho = np.hypot(x_diff, y_diff)
             goal_arc = np.arctan2(y_diff, x_diff)
@@ -128,8 +135,6 @@ class apf():
             #     self.generate_next_goal()
             elif abs(np.arccos(ang_btw))>np.pi/2:
                 print('control: traj behind waypoints, generate next sub-goal!')
-                # self.generate_next_goal()
-
             else:
                 # print('control: track rho!',rho, alpha)
                 self.fnTrackPcontrol(rho, alpha)
@@ -138,6 +143,29 @@ class apf():
             self.generate_next_goal()
         
         elif self.current_mode == self.MotionSM.moveToObs.value:
+            print('state: move to obs')
+            x_diff = self.visited_id_dict[self.visited_id][0] - self.robotPoseX
+            y_diff = self.visited_id_dict[self.visited_id][1] - self.robotPoseY
+            rho = np.hypot(x_diff, y_diff)
+            goal_arc = np.arctan2(y_diff, x_diff)
+            alpha = (goal_arc - self.robotPoseTheta + np.pi) % (2 * np.pi) - np.pi # [-pi, pi]
+            print('rho/alpha: ', rho, alpha)
+            if rho < 1.5 and alpha < 0.1:
+                self.current_mode = self.MotionSM.stabilizeSensing.value
+                self.startSTOPtime = time.time()
+            else:
+                self.fnTrackPcontrol(rho-1.1, alpha)
+        
+        elif self.current_mode == self.MotionSM.stabilizeSensing.value:
+            print('state: stabilizeSensing')
+            if time.time()-self.startSTOPtime>10:
+                self.current_mode = self.MotionSM.exploration.value
+            else:
+                self.fnStop()
+        
+        elif self.current_mode == self.MotionSM.finish.value:
+            print('state: finish zigzag-explore all area')
+            self.fnStop()
 
     def calc_potential_field(self, x, y):
         af = self.calc_attractive_potential(x, y)
@@ -211,29 +239,19 @@ class apf():
             showup_dict = self.CentroidTracker.showup
             objects_dict = self.CentroidTracker.objects
             print('a',showup_dict)
-            showup_keys = showup_dict.keys()
-            for now_key in showup_keys:
-                now_value = showup_dict[now_key]
-                if now_key not in self.visited_id:
+            for item in showup_dict.items():
+                now_key, now_value = item
+                if now_key not in self.visited_id_dict.keys():
                     if now_value > 10:
                         print('now detect tree: ', now_key, ' move to it!')
                         self.current_mode = self.MotionSM.moveToObs.value
-                        self.visited_id.append(now_key)
+                        self.visited_id_dict[now_key]=objects_dict[now_key]
+                        self.visited_id = now_key
                         print('visited_id: ',self.visited_id)
 
         else:
-            return
-        # centroid_tmpXYR = np.array([utm_trunk[0,0],utm_trunk[1,0],inAframe.r])
-        # centroid_tmp_rawList_copy = np.asarray(centroid_rawList_copy[i][:3])
-        # eDist = dist.euclidean(centroid_tmpXYR, centroid_tmp_rawList_copy)
-        # if eDist < 25: # 1m
-            
-        #     if self.observed_obs is None:
-        #         self.observed_obs = np.array([ [utm_trunk[0,0]],[utm_trunk[1,0]] ])
-        #         print('observe new one')
-        #     else:
-        #         self.observed_obs = np.append( self.observed_obs, np.array([ [utm_trunk[0,0]],[utm_trunk[1,0]] ]) )
-        #         print('observe next one')
+            self.CentroidTracker.update(np.array([]))
+        
  
     def generate_next_goal(self):
         
@@ -253,6 +271,44 @@ class apf():
         self.goalPub.publish(msgGoal)
 
     def fnTrackPcontrol(self, dist, angle):
+        msgVel = Twist()
+        if (angle > 0.5 or angle < -0.5):
+            # while(abs(angle)>0.05):
+            # print("adjust angle! angle: ", angle)
+            angularVel = angle * self.angKp
+            if np.abs(angularVel) > self.angVel_bound: 
+                if angularVel > 0:
+                    angularVel = self.angVel_bound
+                else:
+                    angularVel = -self.angVel_bound
+            msgVel.angular.z = angularVel
+            
+            self.velPub.publish(msgVel)
+            return
+            # rospy.sleep(0.2)
+
+        # elif dist > self.GOAL_DIST_THRES:# or abs(angle)>np.pi/2:
+            # print("adjust vel: ")
+
+        linearVel = dist * self.linKp
+        if np.abs(linearVel) > self.linVel_bound:
+            if linearVel > 0 :
+                linearVel = self.linVel_bound
+            else: 
+                linearVel = -self.linVel_bound
+        msgVel.linear.x = linearVel
+
+        angularVel = angle * self.angKp
+        if np.abs(angularVel) > self.angVel_bound: 
+            if angularVel > 0:
+                angularVel = self.angVel_bound
+            else:
+                angularVel = -self.angVel_bound
+        msgVel.angular.z = angularVel
+        
+        self.velPub.publish(msgVel)
+
+    def fnTrackPcontrolObs(self, dist, angle):
         msgVel = Twist()
         if (angle > 0.5 or angle < -0.5):
             # while(abs(angle)>0.05):
