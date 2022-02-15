@@ -13,7 +13,7 @@ name_lst = ['rectangle_triangle',
             ]
 simple_polygon = {
     'rectangle': {
-        "BD": [(0,0),(7,0),(7,4.5),(0,4.5),(0,0)],
+        "BD": [(0,0),(17,0),(17,17),(0,17),(0,0)],
         "obs_lst": [
             ]
     },

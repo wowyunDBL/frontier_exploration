@@ -102,7 +102,7 @@ class apf():
         msg_state = UInt8()
         msg_state.data = self.current_mode
         self.statePub.publish(msg_state)
-        if True:#self.current_mode == self.MotionSM.exploration.value:
+        if self.current_mode == self.MotionSM.exploration.value:
             x_diff, y_diff = self.traj_x - self.robotPoseX, self.traj_y - self.robotPoseY
             rho = np.hypot(x_diff, y_diff)
             goal_arc = np.arctan2(y_diff, x_diff)
@@ -146,9 +146,17 @@ class apf():
             print('state: move to obs')
             x_diff = self.visited_id_dict[self.visited_id][0] - self.robotPoseX
             y_diff = self.visited_id_dict[self.visited_id][1] - self.robotPoseY
+            msgGoal = Point()
+            msgGoal.x = self.visited_id_dict[self.visited_id][0]
+            msgGoal.y = self.visited_id_dict[self.visited_id][1]
+            self.goalPub.publish(msgGoal)
             rho = np.hypot(x_diff, y_diff)
             goal_arc = np.arctan2(y_diff, x_diff)
             alpha = (goal_arc - self.robotPoseTheta + np.pi) % (2 * np.pi) - np.pi # [-pi, pi]
+            msg = Point()
+            msg.x = rho
+            msg.y = alpha
+            self.trajRThetaPub.publish(msg)
             print('rho/alpha: ', rho, alpha)
             if rho < 1.5 and alpha < 0.1:
                 self.current_mode = self.MotionSM.stabilizeSensing.value
@@ -162,6 +170,10 @@ class apf():
                 self.current_mode = self.MotionSM.exploration.value
             else:
                 self.fnStop()
+                msgGoal = Point()
+                msgGoal.x = self.visited_id_dict[self.visited_id][0]
+                msgGoal.y = self.visited_id_dict[self.visited_id][1]
+                self.goalPub.publish(msgGoal)
         
         elif self.current_mode == self.MotionSM.finish.value:
             print('state: finish zigzag-explore all area')

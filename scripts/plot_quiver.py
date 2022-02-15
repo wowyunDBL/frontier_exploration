@@ -90,6 +90,7 @@ class apf_drawing():
         fig1, ax1 = plt.subplots()
         plt.quiver(X, Y, U, V, color='b', units='xy', scale=5)
         plt.scatter(self.ox,self.oy, s=100)
+        plt.scatter(0,0,c='r', s=100)
 
         plt.title('Vector field')
     
