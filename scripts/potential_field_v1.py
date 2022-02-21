@@ -25,8 +25,8 @@ class apf():
     def __init__(self):
         
         '''controlller parameter: angKp > linKp'''
-        self.angKp = 0.6
-        self.linKp = 0.5
+        self.angKp = 0.3
+        self.linKp = 0.6
         self.angVel_bound = 0.5 # 0.5*57=23 degree
         self.linVel_bound = 0.5
         self.GOAL_DIST_THRES = 0.2
@@ -107,10 +107,7 @@ class apf():
             rho = np.hypot(x_diff, y_diff)
             goal_arc = np.arctan2(y_diff, x_diff)
             alpha = (goal_arc - self.robotPoseTheta + np.pi) % (2 * np.pi) - np.pi # [-pi, pi]
-            msg = Point()
-            msg.x = rho
-            msg.y = alpha
-            self.trajRThetaPub.publish(msg)
+            
 
             x_diff_wp, y_diff_wp = self.waypoints_x - self.robotPoseX, self.waypoints_y - self.robotPoseY
             rho_wp = np.hypot(x_diff_wp, y_diff_wp)
@@ -130,6 +127,10 @@ class apf():
             elif rho_wp<rho:
                 print('control: rho_goal<rho, track rho_goal!')
                 self.fnTrackPcontrol(rho_wp, alpha)
+                msg = Point()
+                msg.x = rho_wp
+                msg.y = alpha
+                self.trajRThetaPub.publish(msg)
             # elif rho <= self.GOAL_DIST_THRES:
             #     print('control: achieve traj sub-goal, generate next sub-goal!')
             #     self.generate_next_goal()
@@ -138,7 +139,11 @@ class apf():
             else:
                 # print('control: track rho!',rho, alpha)
                 self.fnTrackPcontrol(rho, alpha)
-            
+                msg = Point()
+                msg.x = rho
+                msg.y = alpha
+                self.trajRThetaPub.publish(msg)
+                
             '''generate next trajectory'''
             self.generate_next_goal()
         
@@ -150,19 +155,20 @@ class apf():
             msgGoal.x = self.visited_id_dict[self.visited_id][0]
             msgGoal.y = self.visited_id_dict[self.visited_id][1]
             self.goalPub.publish(msgGoal)
-            rho = np.hypot(x_diff, y_diff)
+            rho = np.hypot(x_diff, y_diff)-1.1
             goal_arc = np.arctan2(y_diff, x_diff)
             alpha = (goal_arc - self.robotPoseTheta + np.pi) % (2 * np.pi) - np.pi # [-pi, pi]
-            msg = Point()
-            msg.x = rho
-            msg.y = alpha
-            self.trajRThetaPub.publish(msg)
+            
             print('rho/alpha: ', rho, alpha)
-            if rho < 1.5 and alpha < 0.1:
+            if rho < self.GOAL_DIST_THRES and alpha < 0.1:
                 self.current_mode = self.MotionSM.stabilizeSensing.value
                 self.startSTOPtime = time.time()
             else:
-                self.fnTrackPcontrol(rho-1.1, alpha)
+                self.fnTrackPcontrol(rho, alpha)
+                msg = Point()
+                msg.x = rho
+                msg.y = alpha
+                self.trajRThetaPub.publish(msg)
         
         elif self.current_mode == self.MotionSM.stabilizeSensing.value:
             print('state: stabilizeSensing')
@@ -284,7 +290,7 @@ class apf():
 
     def fnTrackPcontrol(self, dist, angle):
         msgVel = Twist()
-        if (angle > 0.5 or angle < -0.5):
+        if (angle > 0.5 or angle < -0.5) and False:
             # while(abs(angle)>0.05):
             # print("adjust angle! angle: ", angle)
             angularVel = angle * self.angKp
