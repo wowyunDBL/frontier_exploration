@@ -22,3 +22,16 @@ roslaunch depth_app depth2ls_simulation.launch
 roslaunch depth_app hector_mower_simulation.launch
 
 rosbag record /cmd_vel /explore/traj /explore/potential/af /explore/potential/rf /explore/trajRTheta /odom /tree/trunk_info /explore/state /scan /scan_filtered
+
+rosbag record /camera/depth/image_raw/coressed /camera/depth/camera_info /odom /cmd_vel /scan /scan_filtered /tree/trunk_info
+rosrun mapping_explorer trunk_info_node.py
+roslaunch mapping_explorer depth2ls_gazebo.launch
+rosrun mapping_explorer plot_scan.py
+
+## 0405
+```
+rosbag record /husky_velocity_controller/cmd_vel /explore/traj /explore/potential/af /explore/potential/rf /explore/trajRTheta /outdoor_waypoint_nav/odometry/filtered_map /tree/trunk_info /explore/state /scan /scan_filtered
+
+rosrun mapping_explorer trunk_info_node.py
+roslaunch realsense2_camera hector_mower.launch
+rosrun map_server map_saver --occ 11 --free 10 -f /home/ncslaber/reso4

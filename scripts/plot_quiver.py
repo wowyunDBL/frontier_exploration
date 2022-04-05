@@ -7,6 +7,8 @@ from matplotlib import cm
 
 x_list = [1.0, 0.8, 0.6, 0.2]
 y_list = [0.0, 0.0, 0.0, 0.0]
+# x_list = [2.5, 5.0]
+# y_list = [1.0, 2.0]
 
 class apf_drawing():
     def __init__(self):
@@ -16,9 +18,9 @@ class apf_drawing():
         self.oy = [2.0]  # obstacle y position list [m]
         self.oradi = [0.3]  # obstacle x position list [m]
         self.waypoints_x = 0.0  # goal x position [m]
-        self.waypoints_y = 0.0
+        self.waypoints_y = 1.0
 
-        self.GOAL_DIST_THRES = 0.1
+        self.GOAL_DIST_THRES = 0.2
         # self.WAYPOINTS_DIST_THRES = 0.
         self.ATTRACT_DIST_THRES = 1
         self.OBSTACLE_THRES = 1
@@ -46,7 +48,7 @@ class apf_drawing():
             D = self.vector_dist( (x,y),(self.ox[i],self.oy[i]) ) - self.oradi[i]
             if D <= self.OBSTACLE_THRES:# and D>0.8:
                 # tmp += (-1/D+1/Q)/(D**2) * ( np.array([self.ox[i], self.oy[i]]) - np.array([x,y])) /2 * 0.5
-                tmp += (-1/D+1/Q)/(D**2) * ( -np.array([self.ox[i], self.oy[i]]) + np.array([x,y])) /2 * 0.5
+                tmp += (-1.0/D+1.0/Q)/(D**2) * ( -np.array([self.ox[i], self.oy[i]]) + np.array([x,y])) /2.0 * 0.5
             # else:
             #     tmp += np.array([0.0,0.0])
         return tmp
@@ -59,8 +61,8 @@ class apf_drawing():
         return af+rf
 
     def plot_quiver(self):
-        x_list = [float(x)/5 for x in range(35)]
-        y_list = [float(y)/5 for y in range(15)]
+        x_list = [float(x)/10 for x in range(70)]
+        y_list = [float(y)/10 for y in range(30)]
         X,Y = np.meshgrid(x_list,y_list)
         U_tmp = []
         V_tmp = []

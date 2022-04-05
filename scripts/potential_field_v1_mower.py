@@ -30,7 +30,7 @@ class apf():
         self.linKp = 0.6
         self.angVel_bound = 0.3 # 0.5*57=23 degree
         self.linVel_bound = 0.3
-        self.GOAL_DIST_THRES = 0.2
+        self.GOAL_DIST_THRES = 0.3
         self.ATTRACT_DIST_THRES = 1
         self.OBSTACLE_THRES = 1.5 #0.8
         self.ROBOT_STEP = 0.3
@@ -52,30 +52,30 @@ class apf():
         self.ox = []
         self.oy = [] 
         self.oradi = []
-        # self.waypoints_x_list = [0.0, 7.0, 7.0, 0.0]  # goal x position [m]
-        # self.waypoints_y_list = [1.0, 1.0, 3.0, 3.0]  # goal y position [m]
+        # self.waypoints_x_list = [352853.0, 352853.0, 352849.0, 352849.0]  # goal x position [m]
+        # self.waypoints_y_list = [2767670.0, 2767687.5, 2767687.5, 2767670.0]  # goal y position [m]  
         self.waypoints_x_list = [0.0, 8.64, 8.64, 0.0]  
         self.waypoints_y_list = [1.0, 1.0, 3.0, 3.0]
         self.wayp_index = 0
         self.waypoints_x = self.waypoints_x_list[self.wayp_index]  # goal x position [m]
         self.waypoints_y = self.waypoints_y_list[self.wayp_index]  # goal y position [m]
-        self.positive_bds = np.array([[0,-5],[20,-5],[20,5],[0,5]])
+        # self.positive_bds = np.array([[0,-5],[20,-5],[20,5],[0,5]])
         
         self.ox_tmp = []
         self.oy_tmp = []
         self.index = 0
 
         '''ros pub/sub'''
-        self.velPub = rospy.Publisher("/cmd_vel", Twist, queue_size=1)
+        self.velPub = rospy.Publisher("/husky_velocity_controller/cmd_vel", Twist, queue_size=1)
         self.goalPub = rospy.Publisher('/explore/traj',Point,queue_size=5) #in the following variabl: traj=goal
         self.potentialPub = rospy.Publisher('/explore/potential',Point,queue_size=5)
         self.potential_af_Pub = rospy.Publisher('/explore/potential/af',Point,queue_size=5)
         self.potential_rf_Pub = rospy.Publisher('/explore/potential/rf',Point,queue_size=5)
         self.trajRThetaPub = rospy.Publisher('/explore/trajRTheta',Point,queue_size=5)
         self.statePub = rospy.Publisher('/explore/state',UInt8,queue_size=5)
-        self.odomSub = rospy.Subscriber("/odom",Odometry, self.cbOdom,buff_size=2**20,queue_size=1)
+        self.odomSub = rospy.Subscriber("/outdoor_waypoint_nav/odometry/filtered_map",Odometry, self.cbOdom,buff_size=2**20,queue_size=1)
         self.trunkInfo = rospy.Subscriber("/tree/trunk_info", Trunkset, self.cbTrunk,buff_size=2**20,queue_size=1)
-        robotPose = rospy.wait_for_message('/odom',Odometry)
+        robotPose = rospy.wait_for_message('/outdoor_waypoint_nav/odometry/filtered_map',Odometry)
         self.init_x = robotPose.pose.pose.position.x
         self.init_y = robotPose.pose.pose.position.y
         quaternion = (robotPose.pose.pose.orientation.x, 
@@ -181,7 +181,7 @@ class apf():
         
         elif self.current_mode == self.MotionSM.stabilizeSensing.value:
             print('state: stabilizeSensing')
-            if time.time()-self.startSTOPtime>3:
+            if time.time()-self.startSTOPtime>5:
                 self.current_mode = self.MotionSM.exploration.value
                 self.visited_id_dict[self.visited_id] = self.CentroidTracker.objects[self.visited_id]
                 self.ox.append(self.visited_id_dict[self.visited_id][0])
@@ -245,7 +245,7 @@ class apf():
         # print('-----------', self.ox)
         # print('-----------', self.oy)
         for i in range(len(self.ox)):
-            D = self.vector_dist( (x,y),(self.ox[i],self.oy[i]) ) - 0.3 #self.oradi[i]
+            D = self.vector_dist( (x,y),(self.ox[i],self.oy[i]) ) - 0.4 #self.oradi[i]
             x_diff, y_diff = self.ox[i]-x,self.oy[i]-y
             rho_wp = np.hypot(x_diff_wp, y_diff_wp)
             rho = np.hypot(x_diff, y_diff)
@@ -258,13 +258,14 @@ class apf():
         return tmp
 
     def cbOdom(self,msg):
-        self.robotPoseX = msg.pose.pose.position.x
-        self.robotPoseY = msg.pose.pose.position.y
+        self.robotPoseX = msg.pose.pose.position.x - self.init_x
+        self.robotPoseY = msg.pose.pose.position.y - self.init_y
         quaternion = (msg.pose.pose.orientation.x, 
                         msg.pose.pose.orientation.y,
                         msg.pose.pose.orientation.z,
                         msg.pose.pose.orientation.w)
         _,_,self.robotPoseTheta = tf.transformations.euler_from_quaternion(quaternion)
+        self.robotPoseTheta = self.robotPoseTheta - self.init_theta
 
     def cbTrunk(self,msg):
         trunk_data = msg
@@ -285,7 +286,7 @@ class apf():
             
             showup_dict = self.CentroidTracker.showup
             objects_dict = self.CentroidTracker.objects
-            # print('a',showup_dict)
+            print('a',showup_dict)
             for item in showup_dict.items():
                 now_key, now_value = item
                 if now_key not in self.visited_id_dict.keys():
@@ -418,13 +419,13 @@ class apf():
         return ((b1-a1)**2 + (b2-a2)**2)**0.5 
 
     def check_APFupperBound(self,vector,msg):
-        if abs(vector[0])>1.5 and abs(vector[1])>1.5:
-            if vector[0]>0:
-                vector[0] = 1.5
-            else:
-                vector[0] = -1.5
-            print(msg+'APF x&y: exceed 1')
-            return vector
+        # if abs(vector[0])>1 and abs(vector[1])>1:
+        #     if vector[0]>0:
+        #         vector[0] = 1.5
+        #     else:
+        #         vector[0] = -1.5
+        #     print(msg+'APF x&y: exceed 1')
+        #     return vector
         if abs(vector[0])>1:
             if vector[0]>0:
                 vector[0] = 1

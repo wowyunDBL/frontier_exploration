@@ -11,13 +11,22 @@ name_lst = ['rectangle_triangle',
             'triangle',
             'circle',
             ]
-simple_polygon = {
+simple_polygon = { 
     'rectangle': {
-        "BD": [(0,0),(17,0),(17,17),(0,17),(0,0)],
+        "BD": [(0,0),(8.64,0),(8.64,4.32),(0,4.32),(0,0)],
         "obs_lst": [
             ]
     },
-    
+    # 'rectangle': {
+    #     "BD": [(352855.0,2767670.0),(352855.0,2767687.5),(352847.5,2767687.5),(352847.5,2767670.0),(352855.0,2767670.0)],
+    #     "obs_lst": [
+    #         ]
+    # },
+    # 'rectangle': {
+    #     "BD": [(0,0),(17,0),(17,17),(0,17),(0,0)],
+    #     "obs_lst": [
+    #         ]
+    # },
     'rectangle_2': {
         "BD": [(-2.25,-2),(-2.25,2),(2.25,2),(2.25,-2),(-2.25,-2)],
         "obs_lst": [
@@ -265,7 +274,7 @@ if __name__ == '__main__':
     plt.axis('equal')
     plt.title('zigzag_driven path', fontsize=18)
     plt.subplots_adjust(top=0.9)
-    plt.savefig('/home/anny/path_zigzag.png')
+    plt.savefig('/home/anny/path_zigzag.svg')
     plt.show()
     plt.close()
     import json
