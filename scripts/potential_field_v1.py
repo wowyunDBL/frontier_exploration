@@ -54,8 +54,8 @@ class apf():
         self.oradi = []
         # self.waypoints_x_list = [0.0, 7.0, 7.0, 0.0]  # goal x position [m]
         # self.waypoints_y_list = [1.0, 1.0, 3.0, 3.0]  # goal y position [m]
-        self.waypoints_x_list = [0.0, 8.64, 8.64, 0.0]  
-        self.waypoints_y_list = [1.0, 1.0, 3.0, 3.0]
+        self.waypoints_x_list = [11.0, 35.0, 35.0, 11.0, 11.0, 35.0, 35.0, 11.0, 11.0, 35.0, 35.0, 11.0, 11.0, 35.0, 35.0, 11.0, 11.0, 35.0, 35.0, 11.0]  
+        self.waypoints_y_list = [12.0, 12.0, 14.0, 14.0, 16.0, 16.0, 18.0, 18.0, 20.0, 20.0, 22.0, 22.0, 24.0, 24.0, 26.0, 26.0, 28.0, 28.0, 30.0, 30.0]
         self.wayp_index = 0
         self.waypoints_x = self.waypoints_x_list[self.wayp_index]  # goal x position [m]
         self.waypoints_y = self.waypoints_y_list[self.wayp_index]  # goal y position [m]
